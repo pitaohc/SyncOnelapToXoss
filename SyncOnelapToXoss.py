@@ -47,6 +47,7 @@ APP_DIR = get_app_dir()
 CONFIG_FILE_PATH = os.path.join(APP_DIR, 'settings.ini')
 STRAVA_STATE_FILE = os.path.join(APP_DIR, 'strava_upload_state.json')
 ONELAP_DOWNLOAD_STATE_FILE = os.path.join(APP_DIR, 'onelap_download_state.json')
+GARMIN_UPLOAD_STATE_FILE = os.path.join(APP_DIR, 'garmin_upload_state.json')
 ONELAP_BASE_WEB_URL = 'https://www.onelap.cn'
 ONELAP_BASE_APP_URL = 'https://u.onelap.cn'
 ONELAP_RECORD_PAGE_URL = f'{ONELAP_BASE_APP_URL}/recordPage'
@@ -1817,7 +1818,7 @@ def click_garmin_confirm_button(tab):
 
 def wait_garmin_import_result(tab, timeout=180):
     """等待 Garmin 导入处理完成，返回 success/failed/unknown"""
-    success_keywords = ['导入完成', '导入成功', '上传成功', '已导入', '完成', 'successfully imported', 'import complete']
+    success_keywords = ['导入完成', '导入成功', '上传成功', '已导入', '完成', '已经上传', 'successfully imported', 'import complete', 'already been uploaded']
     failure_keywords = ['导入失败', '上传失败', '无法导入', '错误', '失败', 'failed', 'error', 'unable to import']
     processing_keywords = ['正在导入', '正在上传', '处理中', '请稍候', 'processing', 'importing', 'uploading']
     end = time.time() + timeout
@@ -1894,6 +1895,26 @@ def sort_garmin_upload_files_chronologically(valid_files):
         logger.warning(f"Garmin 上传排序有 {missing_count} 个文件缺少时间，已放在有时间文件之后")
     return [item[1] for item in sorted_items]
 
+def load_garmin_upload_state(state_file=GARMIN_UPLOAD_STATE_FILE):
+    try:
+        if os.path.exists(state_file):
+            with open(state_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception as e:
+        logger.warning(f'[Garmin] 读取上传状态失败: {e}')
+    return {}
+
+
+def save_garmin_upload_state(state, state_file=GARMIN_UPLOAD_STATE_FILE):
+    try:
+        with open(state_file, 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f'[Garmin] 保存上传状态失败: {e}')
+
+
 def upload_files_to_garmin(tab, valid_files):
     """上传文件到 Garmin Connect"""
     logger.info("===== 开始上传文件到 Garmin Connect =====")
@@ -1902,7 +1923,23 @@ def upload_files_to_garmin(tab, valid_files):
         if not is_garmin_logged_in(tab):
             login_garmin_browser(tab, GARMIN_ACCOUNT, GARMIN_PASSWORD)
 
-        upload_files = sort_garmin_upload_files_chronologically(valid_files)
+        # 去重：跳过已成功上传过的文件（按文件名记录在 garmin_upload_state.json）
+        upload_state = load_garmin_upload_state()
+        pending_files = []
+        skipped_files = []
+        for file_path in valid_files:
+            key = os.path.basename(file_path)
+            if key in upload_state:
+                skipped_files.append(key)
+            else:
+                pending_files.append(file_path)
+        if skipped_files:
+            logger.info(f"Garmin 跳过 {len(skipped_files)} 个已上传过的文件: {', '.join(skipped_files)}")
+        if not pending_files:
+            logger.info("Garmin 没有待上传的新文件")
+            return True
+
+        upload_files = sort_garmin_upload_files_chronologically(pending_files)
         garmin_batch_size = GARMIN_MAX_UPLOAD_FILES if GARMIN_MAX_UPLOAD_FILES and GARMIN_MAX_UPLOAD_FILES > 0 else MAX_FILES_PER_BATCH
         logger.info(f"Garmin 本次待上传文件总数: {len(upload_files)}，每批最多 {garmin_batch_size} 个，按活动时间正序上传")
 
@@ -1945,6 +1982,12 @@ def upload_files_to_garmin(tab, valid_files):
             if result == 'unknown':
                 logger.warning("Garmin 导入结果未知，为避免打断处理，停止后续批次")
                 return False
+
+            # 标记本批文件已成功上传
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            for file_path in abs_paths:
+                upload_state[os.path.basename(file_path)] = {'uploaded_at': now_str}
+            save_garmin_upload_state(upload_state)
 
         logger.info("===== Garmin Connect 文件上传流程完成 =====")
         return True

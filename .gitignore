@@ -7,6 +7,7 @@
 settings.local.ini
 strava_upload_state.json
 onelap_download_state.json
+garmin_upload_state.json
 
 # Python 缓存文件
 __pycache__/
