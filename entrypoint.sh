@@ -6,8 +6,10 @@ set -e
 #
 # 环境变量:
 #   ONELAP_MODE = sync (默认) | vnc
-#     sync - 自动运行同步脚本，结束后容器保持 30 分钟供 VNC 查看
+#     sync - 自动运行同步脚本（受 SYNC_INTERVAL 控制）
 #     vnc  - 仅启动 VNC，不运行脚本，容器一直存活
+#   SYNC_INTERVAL - 同步频率（仅 sync 模式）：
+#                   0=运行一次(默认) | hourly | daily | weekly | 6h | 30m | 3600(秒)
 #   VNC_PW      - VNC 密码（默认 onelap123）
 # =============================================================================
 
@@ -92,35 +94,61 @@ if [ "$ONELAP_MODE" = "vnc" ]; then
     exec sleep infinity
 fi
 
-# sync 模式: 跑同步脚本，结束后保持容器存活供 VNC 查看
-echo "sync 模式: 开始执行同步脚本..."
-cd /app
-python3 SyncOnelapToXoss.py &
-PY_PID=$!
+# ----- 解析同步间隔为秒：支持 hourly/daily/weekly/1h/30m/3600 等 -----
+parse_interval_seconds() {
+    local v="$1"
+    case "$v" in
+        ''|0|once)    echo 0 ;;
+        hourly|1h|h)  echo 3600 ;;
+        daily|1d|d)   echo 86400 ;;
+        weekly|1w|w)  echo 604800 ;;
+        *)
+            if [[ "$v" =~ ^[0-9]+$ ]]; then echo "$v"; return; fi
+            local num="${v//[^0-9]/}" unit="${v//[0-9]/}"
+            case "$unit" in
+                m|M) echo $(( num * 60 )) ;;
+                h|H) echo $(( num * 3600 )) ;;
+                d|D) echo $(( num * 86400 )) ;;
+                w|W) echo $(( num * 604800 )) ;;
+                *)   echo 0 ;;
+            esac ;;
+    esac
+}
 
-# 等待脚本结束，同时处理 SIGTERM 优雅退出
+SYNC_INTERVAL="${SYNC_INTERVAL:-0}"
+INTERVAL_SECONDS=$(parse_interval_seconds "$SYNC_INTERVAL")
+
 cleanup() {
     echo "收到退出信号，清理中..."
-    kill $PY_PID 2>/dev/null || true
+    [ -n "${PY_PID:-}" ] && kill $PY_PID 2>/dev/null || true
+    [ -n "${SLEEP_PID:-}" ] && kill $SLEEP_PID 2>/dev/null || true
     exit 0
 }
 trap cleanup SIGTERM SIGINT
 
-wait $PY_PID || true
-PY_EXIT=$?
-
-if [ $PY_EXIT -eq 0 ]; then
+# sync 模式: 循环执行同步脚本
+cd /app
+while true; do
     echo "=========================================="
+    echo "  sync 模式: 开始执行同步脚本..."
+    python3 SyncOnelapToXoss.py &
+    PY_PID=$!
+    wait $PY_PID || true
+    PY_PID=""
     echo "  同步脚本执行完毕。"
-else
     echo "=========================================="
-    echo "  同步脚本异常退出 (code=$PY_EXIT)。"
-fi
-echo "  容器将继续存活 30 分钟，可通过 VNC 查看浏览器状态。"
-echo "  如需立即退出请按 Ctrl+C。"
-echo "=========================================="
 
-# 保活 30 分钟
-sleep 1800 &
-trap 'kill $! 2>/dev/null; cleanup' SIGTERM SIGINT
-wait $! 2>/dev/null || true
+    if [ "$INTERVAL_SECONDS" = "0" ]; then
+        echo "  单次运行模式：容器继续存活 30 分钟供 VNC 查看后退出。"
+        sleep 1800 &
+        SLEEP_PID=$!
+        wait $SLEEP_PID 2>/dev/null || true
+        exit 0
+    fi
+
+    echo "  下次同步：${INTERVAL_SECONDS} 秒后。"
+    sleep "$INTERVAL_SECONDS" &
+    SLEEP_PID=$!
+    wait $SLEEP_PID 2>/dev/null || true
+    SLEEP_PID=""
+done

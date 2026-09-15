@@ -64,6 +64,9 @@ services:
     # Chrome 已配置 --no-sandbox，以 root 运行无安全隐患
     user: "0:0"
 
+    # 定时运行：设置 SYNC_INTERVAL（见下方环境变量）后取消下面注释，容器异常退出后自动重启
+    # restart: unless-stopped
+
     # ---- 端口 ----
     ports:
       - "5900:5900"   # VNC（桌面客户端）
@@ -92,9 +95,13 @@ services:
       - VNC_PW=onelap123
 
       # 运行模式:
-      #   sync  - 自动执行同步，结束后容器保持 30 分钟供 VNC 查看结果（默认）
+      #   sync  - 自动执行同步
       #   vnc   - 仅启动 VNC + 浏览器，不自动同步，适合手动调试或处理验证码
       - ONELAP_MODE=sync
+
+      # 同步频率（仅 sync 模式）：
+      #   0=运行一次(默认) | hourly | daily | weekly | 30m | 6h | 3600(秒)
+      - SYNC_INTERVAL=0
 
       # 虚拟屏幕分辨率（浏览器窗口大小），改这里即可，无需重新 build
       - DISPLAY_RESOLUTION=1920x1080
