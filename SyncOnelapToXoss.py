@@ -3260,28 +3260,36 @@ def upload_files_to_giant(tab, valid_files):
         logger.error(f"上传到捷安特平台失败: {e}")
         return False
 
-# 获取屏幕尺寸并计算窗口大小
+# 获取屏幕尺寸并计算浏览器窗口大小/位置
+# 本地桌面：用 tkinter 检测真实屏幕，浏览器放右半屏（方便同时看自己的桌面）
+# 容器/无头：无 tkinter 时回退为全屏，分辨率由环境变量 DISPLAY_RESOLUTION 控制
 try:
     import tkinter as tk
     root = tk.Tk()
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
     root.destroy()  # 立即销毁tkinter窗口
-    
-    # 计算半屏尺寸和右侧位置
-    half_width = screen_width // 2
+
+    window_width = screen_width // 2
     window_height = screen_height
-    right_position = half_width  # 右半屏的起始位置
-    
+    window_x = screen_width // 2   # 右半屏起始位置
+    window_y = 0
+
     logger.info(f"检测到屏幕尺寸: {screen_width}x{screen_height}")
-    logger.info(f"设置浏览器窗口: {half_width}x{window_height}，位置: ({right_position}, 0)")
-    
+    logger.info(f"设置浏览器窗口: {window_width}x{window_height}，位置: ({window_x}, {window_y})")
+
 except Exception as e:
-    # 如果获取屏幕尺寸失败，使用默认值
-    logger.warning(f"无法获取屏幕尺寸: {e}，使用默认值")
-    half_width = 960
-    window_height = 1080
-    right_position = 960
+    logger.warning(f"无法获取屏幕尺寸: {e}，使用容器全屏默认值")
+    try:
+        res = (os.environ.get('DISPLAY_RESOLUTION') or '1920x1080').lower().split('x')
+        window_width = int(res[0])
+        window_height = int(res[1])
+    except Exception:
+        window_width = 1920
+        window_height = 1080
+    window_x = 0
+    window_y = 0
+    logger.info(f"设置浏览器窗口: {window_width}x{window_height}，位置: ({window_x}, {window_y})")
 
 # 初始化浏览器选项
 options = ChromiumOptions()
@@ -3298,8 +3306,8 @@ options.set_argument("--disable-extensions")            # 禁用扩展
 options.auto_port()
 
 # 动态设置窗口大小和位置
-options.set_argument(f"--window-size={half_width},{window_height}")    # 设置窗口大小为半屏
-options.set_argument(f"--window-position={right_position},0")          # 设置窗口位置在右侧
+options.set_argument(f"--window-size={window_width},{window_height}")
+options.set_argument(f"--window-position={window_x},{window_y}")
 options.set_argument("--force-device-scale-factor=1")                  # 强制设备缩放因子为1
 
 

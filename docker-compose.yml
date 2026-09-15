@@ -95,3 +95,6 @@ services:
       #   sync  - 自动执行同步，结束后容器保持 30 分钟供 VNC 查看结果（默认）
       #   vnc   - 仅启动 VNC + 浏览器，不自动同步，适合手动调试或处理验证码
       - ONELAP_MODE=sync
+
+      # 虚拟屏幕分辨率（浏览器窗口大小），改这里即可，无需重新 build
+      - DISPLAY_RESOLUTION=1920x1080

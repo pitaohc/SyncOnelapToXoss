@@ -47,7 +47,11 @@ mkdir -p /tmp/x11vnc
 x11vnc -storepasswd "$VNC_PW" /tmp/x11vnc/passwd
 
 # ----- Xvfb 虚拟显示 -----
-Xvfb :99 -screen 0 1280x720x16 -ac +extension RANDR &
+# 分辨率可通过环境变量 DISPLAY_RESOLUTION 控制，默认 1920x1080
+DISPLAY_RESOLUTION="${DISPLAY_RESOLUTION:-1920x1080}"
+SCREEN_WIDTH="${DISPLAY_RESOLUTION%x*}"
+SCREEN_HEIGHT="${DISPLAY_RESOLUTION#*x}"
+Xvfb :99 -screen 0 ${SCREEN_WIDTH}x${SCREEN_HEIGHT}x16 -ac +extension RANDR &
 sleep 1
 # 导出 DISPLAY，否则 DrissionPage 启动的 Chrome（非 headless）无法连接 X server 而崩溃
 export DISPLAY=:99
