@@ -32,6 +32,7 @@ downloads/
 download_igps/
 incremental_sync/
 incremental_test/
+temp/
 /tmp/
 *.tmp
 *.log
