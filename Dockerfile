@@ -33,17 +33,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 
+# 复制依赖清单
+COPY requirements.txt /app/
+
 # Python 依赖（传 PIP_INDEX 可加速，如 --build-arg PIP_INDEX=https://mirrors.aliyun.com/pypi/simple/）
 ARG PIP_INDEX=""
 RUN if [ -n "$PIP_INDEX" ]; then \
         PIP_EXTRA="-i $PIP_INDEX" ; \
     fi ; \
-    pip3 install --break-system-packages --no-cache-dir $PIP_EXTRA \
-        DrissionPage>=4.0.0 \
-        requests>=2.25.0 \
-        bs4>=0.0.1 \
-        beautifulsoup4 \
-        garmin-fit-sdk>=21.0.0
+    pip3 install --break-system-packages --no-cache-dir $PIP_EXTRA -r /app/requirements.txt
 
 # 复制程序文件
 COPY SyncOnelapToXoss.py /app/
