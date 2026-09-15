@@ -74,6 +74,12 @@ services:
       # 【必选】配置文件，复制 settings.ini.example 后填入真实账号密码
       - ./settings.ini:/app/settings.ini
 
+      # 【推荐】代码文件挂载：改这些文件后只需同步 + docker compose restart，无需重新 build
+      - ./SyncOnelapToXoss.py:/app/SyncOnelapToXoss.py
+      - ./incremental_sync_v2.py:/app/incremental_sync_v2.py
+      - ./fit_coord_transform.py:/app/fit_coord_transform.py
+      - ./entrypoint.sh:/entrypoint.sh
+
       # 【推荐】下载的 FIT 文件持久化，下次运行可跳过已下载
       - ./downloads:/app/downloads
 

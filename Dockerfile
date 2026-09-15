@@ -62,4 +62,5 @@ USER seluser
 WORKDIR /app
 EXPOSE 5900 6080
 
-ENTRYPOINT ["/entrypoint.sh"]
+# 用 bash 执行，避免挂载 entrypoint.sh 后因文件缺执行位(x)导致无法启动
+ENTRYPOINT ["bash", "/entrypoint.sh"]

@@ -49,6 +49,8 @@ x11vnc -storepasswd "$VNC_PW" /tmp/x11vnc/passwd
 # ----- Xvfb 虚拟显示 -----
 Xvfb :99 -screen 0 1280x720x16 -ac +extension RANDR &
 sleep 1
+# 导出 DISPLAY，否则 DrissionPage 启动的 Chrome（非 headless）无法连接 X server 而崩溃
+export DISPLAY=:99
 
 # ----- x11vnc（密码保护）-----
 x11vnc -display :99 -forever -shared \
